@@ -1,6 +1,9 @@
 #ifndef __RESTAPI_SERVER_H__
 #define __RESTAPI_SERVER_H__
 #include "Utils.h"
+#include "IController.h"
+#include "ControllerV1.h"
+#include "ControllerV2.h"
 
 class RestApiServer;
 
@@ -12,15 +15,42 @@ struct Route {
 
 class Controller {
 public:
-    static void handleRequest(http::request<http::string_body> request, http::response<http::string_body>& response) {
+    static void handleRequest(std::string target, std::string method, http::request<http::string_body> request, http::response<http::string_body>& response) {
+        std::string response_message;
+        http::status status;
+        std::string apiV1 = "/apiv1/";
+        std::string apiV2 = "/apiv2/";
+        bool is_apiv1 = target.find("/apiv1/") == 0;
+        bool is_apiv2 = target.find("/apiv2/") == 0;
+        std::cout << __FUNCTION__ << ":" << __LINE__ << " :  [" << method << "] " <<  target << std::endl;
+        
+        if (!is_apiv1 && !is_apiv2) {
+            response_message = "505 HTTP Version Not Supported : Controller V1 support Routes [ /apiv1/ OR /apiv2/ ]  ..... \n";
+            status = http::status::bad_request;   
+        }
         try {
-            // code here
+            if (is_apiv1) {
+                std::unique_ptr<IController> controller = std::make_unique<ControllerV1>();
+                controller->handleRequest(request, response);
+            } else if (is_apiv2) {
+                std::unique_ptr<IController> controller = std::make_unique<ControllerV2>();
+                controller->handleRequest(request, response);
+            }
+        } catch (const NotImplementedException& e) {
+            std::cerr << "Exception caught: " << e.what() << std::endl;
+            response_message += e.what();
+            response_message += e.status();
         } catch (const std::exception& e) {
-            // handle exception
+            std::cerr << "Exception caught: " << e.what() << std::endl;
+            response_message += e.what();
+            response_message += "500 Internal Server Error \n";
         } catch (...) {
             // handle unknown exception
+            std::cerr << "Unknown exception caught" << std::endl;
+            response_message = "500 Internal Server Error";
+            status = http::status::bad_request;
         }
-        response.body() = "Response from Controller V1..... \n";
+        response.body() += response_message + "\n";
         response.prepare_payload();
     }
 
@@ -59,8 +89,7 @@ public:
 
 class RestApiServer {
 public:
-    RestApiServer(net::io_context& ioc, ssl::context& ctx, uint16_t port)
-        : ioc_(ioc), ctx_(ctx), port_(port) {}
+    RestApiServer(net::io_context& ioc, ssl::context& ctx, uint16_t port);
 
     // Add a route to the server
     void addRoute(const Route& route);
@@ -73,14 +102,11 @@ public:
     void start();
 
 private:
-    // Load the server certificate
-    void loadServerCertificate(ssl::context& ctx);
-
     // Accept a new connection
     void accept();
 
     // Handle a failure
-    void fail(beast::error_code ec, char const* what)[;
+    void fail(beast::error_code ec, char const* what);
 
     // Member variables
     net::io_context& ioc_;

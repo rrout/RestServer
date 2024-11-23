@@ -1,16 +1,27 @@
 #include "Utils.h"
 
 void ControllerV2::handleRequest(http::request<http::string_body> request, http::response<http::string_body>& response) {
+    std::string response_message;
     std::string target = request.target().to_string();
-
-    auto handler = handlers.find(target);
-    if (handler != handlers.end()) {
-        std::string result = handler->second(request);
-        response.body() = result;
-        response.prepare_payload();
-    } else {
-        throw RestException("Something went wrong");
+    bool handlerFound = false;
+    for (auto handler:handlers) {
+        if (boost::algorithm::contains(target, handler.first)) {
+            response_message = handler.second(request);
+            handlerFound = true;
+        }
     }
+    if (handlerFound == false) {
+        response_message += "Endpoints are:\n";
+        response_message += "POST : /apiv2/PutVnet \n";
+        response_message += "POST : /apiv2/GetVnet \n";
+        response_message += "POST : /apiv2/PutMapping \n";
+        response_message += "GET  : /apiv2/GetMapping \n";
+        response_message += "GET  : /apiv2/GetConfig \n";
+        response_message += "GET  : /apiv2/PutConfig \n";
+        throw NotImplementedException(response_message);
+    }
+    response.body() = response_message;
+    response.prepare_payload();
 }
 
 // In your constructor or initialization function

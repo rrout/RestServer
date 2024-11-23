@@ -8,23 +8,23 @@ bool SslAuth::verify_callback1(bool preverified, ssl::verify_context& ctx) {
     }
   std::cerr << __FUNCTION__ << "--:" << __LINE__ << std::endl;
     char subject_name[256];
-            X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
-            X509_NAME_oneline(X509_get_subject_name(cert), subject_name, sizeof(subject_name));
+    X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
+    X509_NAME_oneline(X509_get_subject_name(cert), subject_name, sizeof(subject_name));
 
-            unsigned char md[EVP_MAX_MD_SIZE];
-            unsigned int n;
-            if (!X509_digest(cert, EVP_sha1(), md, &n)) {
-            std::cerr << __FUNCTION__ << "--********:" << __LINE__ << std::endl;
-                return false;
-            }
+    unsigned char md[EVP_MAX_MD_SIZE];
+    unsigned int n;
+    if (!X509_digest(cert, EVP_sha1(), md, &n)) {
+    std::cerr << __FUNCTION__ << "--********:" << __LINE__ << std::endl;
+        return false;
+    }
 
-            std::ostringstream clientThumbprint;
-            for (unsigned int i = 0; i < n; i++) {
-                clientThumbprint << std::hex << std::uppercase << (md[i] >> 4);
-                clientThumbprint << std::hex << std::uppercase << (md[i] & 0x0F);
-                if (i + 1 < n) clientThumbprint << ":";
-            }
-            return true;
+    std::ostringstream clientThumbprint;
+    for (unsigned int i = 0; i < n; i++) {
+        clientThumbprint << std::hex << std::uppercase << (md[i] >> 4);
+        clientThumbprint << std::hex << std::uppercase << (md[i] & 0x0F);
+        if (i + 1 < n) clientThumbprint << ":";
+    }
+    return true;
 }
 // Function to get the thumbprint (SHA1) of the certificate
 std::string SslAuth::get_certificate_thumbprint(X509* cert) {
@@ -96,9 +96,11 @@ void SslAuth::loadServerCertificate(ssl::context& ctx) {
         std::cerr << __FUNCTION__ << ":" << __LINE__ << std::endl;
         // Load the certificate from the file
         ctx.set_options(ssl::context::default_workarounds | ssl::context::no_sslv2 | ssl::context::single_dh_use);
-        ctx.use_certificate_chain_file("server.crt");
-        ctx.use_private_key_file("server.key", ssl::context::pem);
-        ctx.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
-        ctx.set_verify_callback(verify_callback);
+        ctx.use_certificate_chain_file(CERT_FILE);
+        ctx.use_private_key_file(CERT_KEY_FILE, ssl::context::pem);
+        if (Cfg::verifyClientCert == true) {
+            ctx.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
+            ctx.set_verify_callback(verify_callback);
+        }
         std::cerr << __FUNCTION__ << ":" << __LINE__ << std::endl;
     }

@@ -1,8 +1,5 @@
 #include "Utils.h"
 
-
-
-
 RestApiServer::RestApiServer(net::io_context& ioc, ssl::context& ctx, uint16_t port)
     : ioc_(ioc), ctx_(ctx), port_(port) {}
 
@@ -14,10 +11,33 @@ void RestApiServer::addRoute(const Route& route) {
 // Get the handler for a route
 std::function<void(std::string target, std::string method, http::request<http::string_body>, http::response<http::string_body>&)>
 RestApiServer::getHandler(const std::string& target, const std::string& method) {
-    auto it = routes_.find(target + " " + method);
-    if (it != routes_.end()) {
-        return it->second;
+    std::string target_string = target;
+    std::cout << __FUNCTION__ << ":" << __LINE__ << " :  [" << method << "] " <<  target << std::endl;
+    if (target.empty() || method.empty())
+        return {};
+    size_t first_slash = target.find('/');
+    size_t second_slash = target.find('/', first_slash + 1); 
+    if (first_slash != std::string::npos && second_slash != std::string::npos) { 
+        target_string = target.substr(0, second_slash); 
     }
+
+    if (Cfg::checkRouteOnly) {
+        for (auto route:routes_) {
+            std::cout << "Checking " << route.first << " in " << target_string << std::endl;        
+            if (route.first.find(target_string) == 0) {
+                std::cout << "Found match for : target = " << route.first << std::endl;
+                return route.second;
+            } 
+        }
+        std::cout << "No route match found for : target = " << target_string << std::endl;
+    } else {
+        //std::map<std::string, std::function<void(std::string target, std::string method, http::request<http::string_body>, http::response<http::string_body>&)>>::iterator it;
+        auto it = routes_.find(target + " " + method);
+        if (it != routes_.end()) {
+            return it->second;
+        }
+    }
+    
     return {};
 }
 
@@ -30,22 +50,10 @@ void RestApiServer::start() {
     sslCtx_ = std::make_unique<ssl::context>(std::move(ctx_));
 
     // Load the server certificate
-    loadServerCertificate(*sslCtx_);
+    SslAuth::loadServerCertificate(*sslCtx_);
 
     // Start accepting connections
     accept();
-}
-
-// Load the server certificate
-void RestApiServer::loadServerCertificate(ssl::context& ctx) {
-    std::cerr << __FUNCTION__ << ":" << __LINE__ << std::endl;
-    // Load the certificate from the file
-    ctx.set_options(ssl::context::default_workarounds | ssl::context::no_sslv2 | ssl::context::single_dh_use);
-    ctx.use_certificate_chain_file("server.crt");
-    ctx.use_private_key_file("server.key", ssl::context::pem);
-    ctx.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
-    ctx.set_verify_callback(verify_callback);
-    std::cerr << __FUNCTION__ << ":" << __LINE__ << std::endl;
 }
 
 // Accept a new connection
@@ -176,6 +184,8 @@ int ServerStart() {
         response.body() = "Hello, World!............\n";
         response.prepare_payload();
     }});
+    server.addRoute(Route{"/apiv1", "GET", Controller::handleRequest});
+    server.addRoute(Route{"/apiv2", "", Controller::handleRequest});
     // Start the server
     server.start();
 
